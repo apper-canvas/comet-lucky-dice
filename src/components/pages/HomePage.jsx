@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { Howl } from 'howler';
 import Button from '@/components/atoms/Button';
 import DiceDisplay from '@/components/molecules/DiceDisplay';
 import RollHistory from '@/components/molecules/RollHistory';
 import { rollService } from '@/services';
-
 const HomePage = () => {
   const [gameState, setGameState] = useState({
     currentDice1: 1,
@@ -14,8 +14,8 @@ const HomePage = () => {
     history: []
   });
   const [loading, setLoading] = useState(true);
-
-  // Load initial history
+  const diceRollSound = useRef(null);
+// Load initial history and initialize sound
   useEffect(() => {
     const loadHistory = async () => {
       try {
@@ -31,11 +31,36 @@ const HomePage = () => {
       }
     };
     
+    // Initialize dice roll sound
+    diceRollSound.current = new Howl({
+      src: ['/sounds/dice-roll.mp3', '/sounds/dice-roll.wav'],
+      volume: 0.7,
+      preload: true,
+      onloaderror: (id, error) => {
+        console.warn('Dice roll sound failed to load:', error);
+      }
+    });
+    
     loadHistory();
-  }, []);
 
-  const rollDice = async () => {
+    // Cleanup sound on unmount
+    return () => {
+      if (diceRollSound.current) {
+        diceRollSound.current.unload();
+      }
+    };
+  }, []);
+const rollDice = async () => {
     if (gameState.isRolling) return;
+
+    // Play dice roll sound effect
+    try {
+      if (diceRollSound.current && diceRollSound.current.state() === 'loaded') {
+        diceRollSound.current.play();
+      }
+    } catch (error) {
+      console.warn('Failed to play dice roll sound:', error);
+    }
 
     // Start rolling animation
     setGameState(prev => ({ ...prev, isRolling: true }));

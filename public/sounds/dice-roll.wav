@@ -1,0 +1,4 @@
+// This is a placeholder for the dice roll sound file (WAV format as fallback).
+// Replace this file with an actual WAV audio file containing a dice roll sound effect.
+// The file should be a short (1-2 seconds) satisfying dice rolling sound.
+// This WAV version serves as a fallback for browsers that don't support MP3.
