@@ -2,7 +2,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import ApperIcon from '@/components/ApperIcon';
 
-const RollHistory = ({ rolls, onClear }) => {
+const RollHistory = ({ rolls, onClear, players = [], gameMode = 'single' }) => {
+  const getPlayerName = (playerId) => {
+    const player = players.find(p => p.Id === playerId);
+    return player ? player.name : 'Unknown';
+  };
+
   if (!rolls || rolls.length === 0) {
     return (
       <motion.div
@@ -12,7 +17,9 @@ const RollHistory = ({ rolls, onClear }) => {
       >
         <ApperIcon name="Dice1" className="w-12 h-12 text-primary/50 mx-auto mb-4" />
         <p className="text-primary/70 font-heading text-lg mb-2">No rolls yet!</p>
-        <p className="text-white/60">Roll the dice to see your history</p>
+        <p className="text-white/60">
+          {gameMode === 'multi' ? 'Players roll the dice to see history' : 'Roll the dice to see your history'}
+        </p>
       </motion.div>
     );
   }
@@ -24,7 +31,9 @@ const RollHistory = ({ rolls, onClear }) => {
       className="bg-surface/30 backdrop-blur-sm rounded-2xl p-6 border border-primary/20"
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-primary font-display text-xl">Roll History</h3>
+        <h3 className="text-primary font-display text-xl">
+          {gameMode === 'multi' ? 'Game History' : 'Roll History'}
+        </h3>
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -48,6 +57,13 @@ const RollHistory = ({ rolls, onClear }) => {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
+                  {gameMode === 'multi' && roll.playerId && (
+                    <div className="flex-shrink-0">
+                      <span className="text-xs text-primary/70 bg-primary/10 px-2 py-1 rounded-full">
+                        {getPlayerName(roll.playerId)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center space-x-2">
                     <div className="w-6 h-6 bg-primary/20 rounded border border-primary/30 flex items-center justify-center">
                       <span className="text-primary text-xs font-bold">{roll.dice1}</span>
@@ -56,8 +72,13 @@ const RollHistory = ({ rolls, onClear }) => {
                       <span className="text-primary text-xs font-bold">{roll.dice2}</span>
                     </div>
                   </div>
-                  <div className="text-accent font-display text-lg font-bold">
+                  <div className={`font-display text-lg font-bold ${
+                    roll.total === 2 || roll.total === 12 ? 'text-error' : 'text-accent'
+                  }`}>
                     = {roll.total}
+                    {(roll.total === 2 || roll.total === 12) && gameMode === 'multi' && (
+                      <span className="text-xs ml-1">⚠️</span>
+                    )}
                   </div>
                 </div>
                 <div className="text-white/50 text-sm">
