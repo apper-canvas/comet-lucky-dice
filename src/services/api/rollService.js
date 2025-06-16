@@ -1,80 +1,192 @@
-import rollData from '../mockData/roll.json';
-
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+import { toast } from 'react-toastify';
 
 class RollService {
   constructor() {
-    this.rolls = [...rollData];
     this.players = [];
     this.currentPlayerIndex = 0;
     this.gameMode = 'single'; // 'single' or 'multi'
     this.gameActive = false;
+    this.apperClient = null;
+    this.initializeClient();
+  }
+
+  initializeClient() {
+    const { ApperClient } = window.ApperSDK;
+    this.apperClient = new ApperClient({
+      apperProjectId: import.meta.env.VITE_APPER_PROJECT_ID,
+      apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
+    });
   }
 
   async getAll() {
-    await delay(200);
-    return [...this.rolls];
+    try {
+      const params = {
+        Fields: ['dice1', 'dice2', 'total', 'timestamp', 'player_id', 'player_name'],
+        orderBy: [
+          {
+            FieldName: "timestamp",
+            SortType: "DESC"
+          }
+        ],
+        PagingInfo: {
+          Limit: 10,
+          Offset: 0
+        }
+      };
+
+      const response = await this.apperClient.fetchRecords('roll', params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return [];
+      }
+
+      return response.data || [];
+    } catch (error) {
+      console.error("Error fetching rolls:", error);
+      toast.error('Failed to load roll history');
+      return [];
+    }
   }
 
   async getById(id) {
-    await delay(200);
-    const roll = this.rolls.find(r => r.Id === parseInt(id, 10));
-    if (!roll) {
-      throw new Error('Roll not found');
+    try {
+      const params = {
+        fields: ['dice1', 'dice2', 'total', 'timestamp', 'player_id', 'player_name']
+      };
+
+      const response = await this.apperClient.getRecordById('roll', parseInt(id, 10), params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return null;
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching roll with ID ${id}:`, error);
+      toast.error('Failed to load roll');
+      return null;
     }
-    return { ...roll };
   }
 
   async create(rollData) {
-    await delay(300);
-    const newRoll = {
-      Id: Math.max(...this.rolls.map(r => r.Id), 0) + 1,
-      ...rollData,
-      timestamp: new Date().toISOString()
-    };
-    this.rolls.unshift(newRoll);
-    
-    // Update player stats if in multi-player mode
-    if (this.gameMode === 'multi' && rollData.playerId) {
-      const player = this.players.find(p => p.Id === rollData.playerId);
-      if (player) {
-        player.totalRolls++;
-        player.totalScore += rollData.total;
-        
-        // Check for strikes (rolling 2 or 12)
-        if (rollData.total === 2 || rollData.total === 12) {
-          player.strikes++;
-        }
-        
-        // Track highest roll
-        if (rollData.total > player.highestRoll) {
-          player.highestRoll = rollData.total;
-        }
+    try {
+      const params = {
+        records: [
+          {
+            // Only include Updateable fields
+            dice1: rollData.dice1,
+            dice2: rollData.dice2,
+            total: rollData.total,
+            timestamp: rollData.timestamp,
+            player_id: rollData.playerId || null,
+            player_name: rollData.playerName || null
+          }
+        ]
+      };
+
+      const response = await this.apperClient.createRecord('roll', params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return null;
       }
+
+      if (response.results) {
+        const successfulRecords = response.results.filter(result => result.success);
+        const failedRecords = response.results.filter(result => !result.success);
+        
+        if (failedRecords.length > 0) {
+          console.error(`Failed to create roll records:${JSON.stringify(failedRecords)}`);
+          
+          failedRecords.forEach(record => {
+            record.errors?.forEach(error => {
+              toast.error(`${error.fieldLabel}: ${error.message}`);
+            });
+            if (record.message) toast.error(record.message);
+          });
+        }
+        
+        return successfulRecords.length > 0 ? successfulRecords[0].data : null;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error creating roll:", error);
+      toast.error('Failed to save roll');
+      return null;
     }
-    
-    // Keep only last 10 rolls for multi-player, 5 for single
-    const maxRolls = this.gameMode === 'multi' ? 10 : 5;
-    if (this.rolls.length > maxRolls) {
-      this.rolls = this.rolls.slice(0, maxRolls);
-    }
-    return { ...newRoll };
   }
 
   async delete(id) {
-    await delay(200);
-    const index = this.rolls.findIndex(r => r.Id === parseInt(id, 10));
-    if (index === -1) {
-      throw new Error('Roll not found');
+    try {
+      const params = {
+        RecordIds: [parseInt(id, 10)]
+      };
+
+      const response = await this.apperClient.deleteRecord('roll', params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return false;
+      }
+
+      if (response.results) {
+        const failedDeletions = response.results.filter(result => !result.success);
+        
+        if (failedDeletions.length > 0) {
+          console.error(`Failed to delete roll records:${JSON.stringify(failedDeletions)}`);
+          
+          failedDeletions.forEach(record => {
+            if (record.message) toast.error(record.message);
+          });
+          return false;
+        }
+        
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Error deleting roll:", error);
+      toast.error('Failed to delete roll');
+      return false;
     }
-    this.rolls.splice(index, 1);
-    return true;
   }
 
   async clearHistory() {
-    await delay(200);
-    this.rolls = [];
-    return true;
+    try {
+      // Get all rolls first
+      const rolls = await this.getAll();
+      
+      if (rolls.length === 0) {
+        return true;
+      }
+
+      const rollIds = rolls.map(roll => roll.Id);
+      const params = {
+        RecordIds: rollIds
+      };
+
+      const response = await this.apperClient.deleteRecord('roll', params);
+      
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error clearing history:", error);
+      toast.error('Failed to clear history');
+      return false;
+    }
   }
 
   generateRoll() {
@@ -90,9 +202,8 @@ class RollService {
     };
   }
 
-  // Multi-player methods
+  // Multi-player methods (using in-memory storage for game session)
   async addPlayer(name) {
-    await delay(200);
     if (!name || name.trim().length === 0) {
       throw new Error('Player name is required');
     }
@@ -117,7 +228,6 @@ class RollService {
   }
 
   async removePlayer(id) {
-    await delay(200);
     const index = this.players.findIndex(p => p.Id === parseInt(id, 10));
     if (index === -1) {
       throw new Error('Player not found');
@@ -127,27 +237,22 @@ class RollService {
   }
 
   async getActivePlayers() {
-    await delay(200);
     return this.players.filter(p => p.isActive && p.strikes < 3);
   }
 
   async getPlayerStats(id) {
-    await delay(200);
     const player = this.players.find(p => p.Id === parseInt(id, 10));
     if (!player) {
       throw new Error('Player not found');
     }
     
-    const playerRolls = this.rolls.filter(r => r.playerId === id);
     return {
       ...player,
-      averageRoll: player.totalRolls > 0 ? (player.totalScore / player.totalRolls).toFixed(1) : 0,
-      recentRolls: playerRolls.slice(0, 3)
+      averageRoll: player.totalRolls > 0 ? (player.totalScore / player.totalRolls).toFixed(1) : 0
     };
   }
 
   async getCurrentPlayer() {
-    await delay(100);
     const activePlayers = this.players.filter(p => p.isActive && p.strikes < 3);
     if (activePlayers.length === 0) return null;
     
@@ -159,7 +264,6 @@ class RollService {
   }
 
   async nextTurn() {
-    await delay(100);
     const activePlayers = this.players.filter(p => p.isActive && p.strikes < 3);
     if (activePlayers.length <= 1) {
       this.gameActive = false;
@@ -171,7 +275,6 @@ class RollService {
   }
 
   async setGameMode(mode) {
-    await delay(100);
     this.gameMode = mode;
     if (mode === 'single') {
       this.players = [];
@@ -182,7 +285,6 @@ class RollService {
   }
 
   async startGame() {
-    await delay(200);
     if (this.players.length < 2) {
       throw new Error('At least 2 players required to start the game');
     }
@@ -193,11 +295,9 @@ class RollService {
   }
 
   async resetGame() {
-    await delay(200);
     this.players = [];
     this.currentPlayerIndex = 0;
     this.gameActive = false;
-    this.rolls = [];
     this.gameMode = 'single';
     return true;
   }
