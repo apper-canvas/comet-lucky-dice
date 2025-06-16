@@ -5,6 +5,7 @@ import { Howl } from 'howler';
 import Button from '@/components/atoms/Button';
 import DiceDisplay from '@/components/molecules/DiceDisplay';
 import RollHistory from '@/components/molecules/RollHistory';
+import ApperIcon from '@/components/ApperIcon';
 import { rollService } from '@/services';
 const HomePage = () => {
   const [gameState, setGameState] = useState({
