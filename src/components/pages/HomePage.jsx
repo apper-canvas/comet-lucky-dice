@@ -693,8 +693,10 @@ const HomePage = () => {
               ? 'Avoid rolling 2 or 12 - three strikes and you\'re out!' 
               : 'May the odds be in your favor!'}
           </p>
-        </motion.div>
+</motion.div>
       </div>
     </div>
   );
 };
+
+export default HomePage;
